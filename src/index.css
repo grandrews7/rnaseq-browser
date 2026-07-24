@@ -1,0 +1,80 @@
+:root {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1a1a1a;
+  background: #ffffff;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+}
+
+h1 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 14px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.controls input {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 10px;
+  width: 280px;
+  border: 1px solid #cfcfcf;
+  border-radius: 6px;
+}
+
+.controls button {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  border: 1px solid #cfcfcf;
+  border-radius: 6px;
+  background: #fafafa;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  background: #f0f0f0;
+}
+
+.spacer {
+  width: 16px;
+}
+
+.readout {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  margin: 10px 0 0;
+}
+
+.dim {
+  color: #777;
+}
+
+.error {
+  font-size: 13px;
+  color: #b3261e;
+  margin: 6px 0 0;
+}
+
+.browser {
+  margin-top: 18px;
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e6e6e6;
+  border-radius: 8px;
+  padding: 8px 0;
+}
