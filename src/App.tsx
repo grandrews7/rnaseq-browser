@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   GenomeBrowser,
   bigWigModule,
+  bigBedModule,
   createBrowserStore,
   createTrackStore,
   transcriptModule,
@@ -69,7 +70,7 @@ const junctionTrack = junctionModule.create({
   title: "Risdiplam 1µM rep1 — junctions",
   height: 100,
   config: {
-    url: "https://users.wenglab.org/andrewsg/browser/Exp1_risdiplam_1um_rep1.json",
+    url: "https://users.wenglab.org/andrewsg/browser/Exp1_risdiplam_1um_rep1.junctions.bb",
     minCount: 3,
     maxSpan: 30000,
     sample: "Exp1_risdiplam_1um_rep1",
@@ -77,11 +78,12 @@ const junctionTrack = junctionModule.create({
 });
 
 const useTrackStore = createTrackStore({
-  modules: [bigWigModule, transcriptModule, junctionModule],
+  modules: [bigWigModule, transcriptModule, junctionModule, bigBedModule],
   tracks: SHOW_GENE_TRACK
     ? [geneTrack, junctionTrack, ...signalTracks]
     : [junctionTrack, ...signalTracks],
 });
+
 /**
  * Make pasted coordinates parseable. Papers, genome browsers, and macOS
  * smart-dashes all produce en/em dashes and thin spaces that the region

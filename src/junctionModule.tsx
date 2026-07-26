@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   SettingsSection,
   defineTrackModule,
+  fetchBigBedRows,
   fetchOnChange,
   useInteraction,
   useTooltip,
@@ -16,10 +17,34 @@ import {
  * scaled to (log) read count and the raw count labeled at the apex. Pair it
  * with a bigWig coverage track underneath for the full sashimi picture.
  *
- * Data is the compact JSON produced by scripts/star_junctions_to_json.py.
+ * Data is an indexed bigBed produced by scripts/star_junctions_to_bed.py +
+ * bedToBigBed. The browser reads only the visible region via HTTP range
+ * requests, so it scales to many samples and large files. The bigBed's extra
+ * columns (declared in junctions.as) are parsed via the schema below.
+ *
  * `sample` is carried through so a future differential view can color or group
  * by condition without reshaping the data.
  */
+
+/**
+ * Field order MUST match the BED column order written by
+ * star_junctions_to_bed.py and declared in junctions.as:
+ *   chrom start end name score strand readCount uniqueCount multiCount annotated motif
+ * The bigBed parser maps columns onto these keys positionally, so order matters.
+ */
+const junctionSchema = z.object({
+  chrom: z.string(),
+  start: z.coerce.number(),
+  end: z.coerce.number(),
+  name: z.string(),
+  score: z.coerce.number(),
+  strand: z.string(),
+  readCount: z.coerce.number(),
+  uniqueCount: z.coerce.number(),
+  multiCount: z.coerce.number(),
+  annotated: z.coerce.number(),
+  motif: z.coerce.number(),
+});
 
 const configSchema = z.object({
   // URL of the per-sample junction JSON (or an endpoint that takes a region).
@@ -47,6 +72,8 @@ type Junction = {
   start: number;
   end: number;
   count: number;
+  unique: number;
+  multi: number;
   strand: "+" | "-" | ".";
   annotated: boolean;
   motif: number;
@@ -153,26 +180,32 @@ export const junctionModule = defineTrackModule<Junction>()({
   defaults: { height: 90, color: "#2266aa" },
   configSchema,
   async fetch({ config, region }): Promise<Data> {
-    // Static per-sample file: fetch whole, filter to region client-side.
-    // For a region endpoint, append region params here instead.
-    const response = await fetch(config.url);
-    if (!response.ok) {
-      throw new Error(`Junction request failed with ${response.status}`);
-    }
-    const all = (await response.json()) as Data;
-    return all.filter(
-      (j) =>
-        j.chromosome === region.chromosome &&
-        j.end >= region.start &&
-        j.start <= region.end,
-    );
+    // Range-read only the visible region from the bigBed. The package's reader
+    // issues HTTP range requests against the index, so payload scales with the
+    // window, not the file. The schema unpacks our extra columns.
+    const rows = await fetchBigBedRows({
+      url: config.url,
+      region,
+      schema: junctionSchema,
+    });
+    return rows.map((row) => ({
+      chromosome: row.chrom ?? region.chromosome,
+      start: row.start,
+      end: row.end,
+      count: row.readCount,
+      unique: row.uniqueCount,
+      multi: row.multiCount,
+      strand: (row.strand as Junction["strand"]) ?? ".",
+      annotated: row.annotated === 1,
+      motif: row.motif,
+    }));
   },
   render: { full: JunctionRenderer },
   settingsComponent: JunctionSettings,
   tooltipComponent: ({ item }) => (
     <text>
-      {item.count} reads · {item.annotated ? "annotated" : "novel"} ·{" "}
-      {item.strand}
+      {item.count} reads ({item.unique} uniq / {item.multi} multi) ·{" "}
+      {item.annotated ? "annotated" : "novel"} · {item.strand}
     </text>
   ),
 });
