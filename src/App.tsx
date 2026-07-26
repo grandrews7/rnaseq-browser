@@ -7,6 +7,9 @@ import {
   transcriptModule,
   type AnyTrackInstance,
 } from "@weng-lab/genomebrowser";
+
+import { junctionModule } from "./junctionModule";
+
 import {
   ASSEMBLY,
   CANONICAL_COLOR,
@@ -61,11 +64,23 @@ const geneTrack = transcriptModule.create({
   },
 });
 
-const useTrackStore = createTrackStore({
-  modules: [bigWigModule, transcriptModule],
-  tracks: SHOW_GENE_TRACK ? [geneTrack, ...signalTracks] : signalTracks,
+const junctionTrack = junctionModule.create({
+  id: "risdiplam-1um-rep1-jxn",
+  title: "Risdiplam 1µM rep1 — junctions",
+  height: 100,
+  config: {
+    url: "/junctions/smn_region.json",
+    minCount: 3,
+    sample: "Exp1_risdiplam_1um_rep1",
+  },
 });
 
+const useTrackStore = createTrackStore({
+  modules: [bigWigModule, transcriptModule, junctionModule],
+  tracks: SHOW_GENE_TRACK
+    ? [geneTrack, junctionTrack, ...signalTracks]
+    : [junctionTrack, ...signalTracks],
+});
 /**
  * Make pasted coordinates parseable. Papers, genome browsers, and macOS
  * smart-dashes all produce en/em dashes and thin spaces that the region
