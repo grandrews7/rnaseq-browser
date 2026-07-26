@@ -27,7 +27,7 @@ export type RnaSeqTrack = {
 };
 
 /** Starting view. Format: "chr:start-end". */
-export const INITIAL_REGION = "chr5:71035000-71080000";
+export const INITIAL_REGION = "chr5:70049635-70078522";
 
 /** Genome assembly used by the gene annotation track. */
 export const ASSEMBLY = "GRCh38";

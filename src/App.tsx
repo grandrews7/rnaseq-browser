@@ -69,8 +69,9 @@ const junctionTrack = junctionModule.create({
   title: "Risdiplam 1µM rep1 — junctions",
   height: 100,
   config: {
-    url: "/junctions/smn_region.json",
+    url: "https://users.wenglab.org/andrewsg/browser/Exp1_risdiplam_1um_rep1.json",
     minCount: 3,
+    maxSpan: 30000,
     sample: "Exp1_risdiplam_1um_rep1",
   },
 });

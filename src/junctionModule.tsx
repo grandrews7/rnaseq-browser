@@ -26,6 +26,13 @@ const configSchema = z.object({
   url: fetchOnChange(z.string().min(1)),
   // Hide junctions below this many reads; re-renders without refetching.
   minCount: z.number().default(3),
+  // Hide junctions whose genomic span (end - start) is outside these bounds.
+  // maxSpan is the useful one for paralog regions like SMN: multi-mapped reads
+  // produce spurious long-range junctions (one paralog's exon to another's)
+  // that render as flat streaks. Capping the span drops them. minSpan removes
+  // implausibly short junctions. Both optional; unset = no span filtering.
+  minSpan: z.number().optional(),
+  maxSpan: z.number().optional(),
   // Optional identity for grouping/coloring later.
   sample: z.string().optional(),
   arcColor: z.string().default("#2266aa"),
@@ -58,7 +65,13 @@ function JunctionRenderer({
   const tooltip = useTooltip<Junction, Config>();
   const bases = region.end - region.start;
 
-  const visible = data.filter((j) => j.count >= config.minCount);
+  const visible = data.filter((j) => {
+    if (j.count < config.minCount) return false;
+    const span = j.end - j.start;
+    if (config.minSpan !== undefined && span < config.minSpan) return false;
+    if (config.maxSpan !== undefined && span > config.maxSpan) return false;
+    return true;
+  });
   if (visible.length === 0) return null;
 
   const maxCount = Math.max(...visible.map((j) => j.count));
