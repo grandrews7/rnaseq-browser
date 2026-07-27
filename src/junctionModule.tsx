@@ -6,7 +6,7 @@ import {
   fetchOnChange,
   useInteraction,
   useTooltip,
-  type TrackRendererProps,
+  type TrackRenderer,
   type TrackSettingsProps,
 } from "@weng-lab/genomebrowser";
 
@@ -93,13 +93,13 @@ type Junction = {
 
 type Data = Junction[];
 
-function JunctionRenderer({
+const JunctionRenderer: TrackRenderer<Config, Data> = ({
   config,
   data,
   region,
   width,
   height,
-}: TrackRendererProps<Config, Data>) {
+}) => {
   const interaction = useInteraction<Junction>();
   const tooltip = useTooltip<Junction, Config>();
   const bases = region.end - region.start;
@@ -164,7 +164,7 @@ function JunctionRenderer({
       })}
     </>
   );
-}
+};
 
 function JunctionSettings({ config, updateConfig }: TrackSettingsProps<Config>) {
   return (
@@ -216,15 +216,16 @@ export const junctionModule = defineTrackModule<Junction>()({
       acceptorCtx: row.acceptorCtx ?? "",
     }));
   },
-  render: { full: JunctionRenderer },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  render: { full: JunctionRenderer as any },
   settingsComponent: JunctionSettings,
   tooltipComponent: ({ item }) => {
     // Split "EXON]intron" so we can style the boundary and the canonical
     // dinucleotide. donorCtx = EXON]gt..., acceptorCtx = ...ag]EXON.
-    const canonical =
-      item.donorDi === "GT" && item.acceptorDi === "AG";
+    const canonical = item.donorDi === "GT" && item.acceptorDi === "AG";
     const line = 15;
     const mono = { fontFamily: "monospace", fontSize: 12 } as const;
+    const hasSeq = Boolean(item.donorCtx) && Boolean(item.acceptorCtx);
 
     return (
       <g>
@@ -233,20 +234,22 @@ export const junctionModule = defineTrackModule<Junction>()({
         </text>
         <text {...mono} y={line}>
           {item.annotated ? "annotated" : "novel"} · {item.strand} ·{" "}
-          {canonical ? "canonical GT-AG" : `non-canonical ${item.donorDi}-${item.acceptorDi}`}
+          {canonical
+            ? "canonical GT-AG"
+            : `non-canonical ${item.donorDi}-${item.acceptorDi}`}
         </text>
-        {item.donorCtx && (
+        {hasSeq ? (
           <text {...mono} y={line * 2.4}>
-            <tspan fill="#666">donor    </tspan>
+            <tspan fill="#666">donor </tspan>
             <tspan fill="#111">{item.donorCtx}</tspan>
           </text>
-        )}
-        {item.acceptorCtx && (
+        ) : null}
+        {hasSeq ? (
           <text {...mono} y={line * 3.4}>
             <tspan fill="#666">acceptor </tspan>
             <tspan fill="#111">{item.acceptorCtx}</tspan>
           </text>
-        )}
+        ) : null}
       </g>
     );
   },
