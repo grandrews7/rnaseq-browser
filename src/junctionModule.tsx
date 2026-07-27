@@ -44,6 +44,14 @@ const junctionSchema = z.object({
   multiCount: z.coerce.number(),
   annotated: z.coerce.number(),
   motif: z.coerce.number(),
+  // Splice-site sequence, biological 5'->3'. donorDi/acceptorDi are the
+  // canonical dinucleotides (GT/AG); donorCtx/acceptorCtx are EXON]intron and
+  // intron]EXON with the boundary marked by ]. Optional so a bigBed built by
+  // the older converter (no sequence columns) still parses.
+  donorDi: z.string().optional().default(""),
+  acceptorDi: z.string().optional().default(""),
+  donorCtx: z.string().optional().default(""),
+  acceptorCtx: z.string().optional().default(""),
 });
 
 const configSchema = z.object({
@@ -77,6 +85,10 @@ type Junction = {
   strand: "+" | "-" | ".";
   annotated: boolean;
   motif: number;
+  donorDi: string;
+  acceptorDi: string;
+  donorCtx: string;
+  acceptorCtx: string;
 };
 
 type Data = Junction[];
@@ -198,14 +210,44 @@ export const junctionModule = defineTrackModule<Junction>()({
       strand: (row.strand as Junction["strand"]) ?? ".",
       annotated: row.annotated === 1,
       motif: row.motif,
+      donorDi: row.donorDi ?? "",
+      acceptorDi: row.acceptorDi ?? "",
+      donorCtx: row.donorCtx ?? "",
+      acceptorCtx: row.acceptorCtx ?? "",
     }));
   },
   render: { full: JunctionRenderer },
   settingsComponent: JunctionSettings,
-  tooltipComponent: ({ item }) => (
-    <text>
-      {item.count} reads ({item.unique} uniq / {item.multi} multi) ·{" "}
-      {item.annotated ? "annotated" : "novel"} · {item.strand}
-    </text>
-  ),
+  tooltipComponent: ({ item }) => {
+    // Split "EXON]intron" so we can style the boundary and the canonical
+    // dinucleotide. donorCtx = EXON]gt..., acceptorCtx = ...ag]EXON.
+    const canonical =
+      item.donorDi === "GT" && item.acceptorDi === "AG";
+    const line = 15;
+    const mono = { fontFamily: "monospace", fontSize: 12 } as const;
+
+    return (
+      <g>
+        <text {...mono} y={0}>
+          {item.count} reads ({item.unique} uniq / {item.multi} multi)
+        </text>
+        <text {...mono} y={line}>
+          {item.annotated ? "annotated" : "novel"} · {item.strand} ·{" "}
+          {canonical ? "canonical GT-AG" : `non-canonical ${item.donorDi}-${item.acceptorDi}`}
+        </text>
+        {item.donorCtx && (
+          <text {...mono} y={line * 2.4}>
+            <tspan fill="#666">donor    </tspan>
+            <tspan fill="#111">{item.donorCtx}</tspan>
+          </text>
+        )}
+        {item.acceptorCtx && (
+          <text {...mono} y={line * 3.4}>
+            <tspan fill="#666">acceptor </tspan>
+            <tspan fill="#111">{item.acceptorCtx}</tspan>
+          </text>
+        )}
+      </g>
+    );
+  },
 });
