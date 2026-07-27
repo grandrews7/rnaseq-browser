@@ -24,7 +24,10 @@ const configSchema = z.object({
   bamUrl: fetchOnChange(z.string().min(1)),
   baiUrl: z.string().optional(),
   display: z.enum(["coverage", "pileup", "both", "sashimi"]).default("coverage"),
-  maxBases: z.number().default(20000),
+  maxBases: z.number().default(20000),        // pileup/coverage zoom gate
+  sashimiMaxBases: z.number().default(500000), // sashimi can render much wider
+  maxSpan: z.number().default(30000),          // drop paralog-crossing arcs
+  minMapq: z.number().default(1),              // 0 drops multi-mappers (MAPQ 0)
   maxReads: z.number().default(400),
   color: z.string().default("#5b8bd0"),
   minusColor: z.string().default("#d08b5b"),
@@ -238,17 +241,22 @@ function Sashimi({
   width,
   height,
   color,
+  maxSpan,
 }: {
   reads: BamAlignment[];
   region: { start: number; end: number };
   width: number;
   height: number;
   color: string;
+  maxSpan: number;
 }) {
   const bases = region.end - region.start;
   const toX = (pos: number) => ((pos - region.start) / bases) * width;
   const junctions = junctionsFromReads(reads).filter(
-    (j) => j.end >= region.start && j.start <= region.end,
+    (j) =>
+      j.end >= region.start &&
+      j.start <= region.end &&
+      j.end - j.start <= maxSpan,
   );
   if (junctions.length === 0) return null;
   const maxCount = Math.max(...junctions.map((j) => j.count));
@@ -284,10 +292,11 @@ const BamRenderer: TrackRenderer<Config, Data> = ({ config, data, region, width,
   const tooltip = useTooltip<BamAlignment, Config>();
   const bases = region.end - region.start;
 
-  if (bases > config.maxBases) {
+  const gate = config.display === "sashimi" ? config.sashimiMaxBases : config.maxBases;
+  if (bases > gate) {
     return (
       <text x={width / 2} y={height / 2} textAnchor="middle" fontSize={12} fill="#999">
-        Zoom in below {config.maxBases.toLocaleString()} bp to see BAM data
+        Zoom in below {gate.toLocaleString()} bp to see BAM data
       </text>
     );
   }
@@ -305,6 +314,7 @@ const BamRenderer: TrackRenderer<Config, Data> = ({ config, data, region, width,
         width={width}
         height={height}
         color={config.coverageColor}
+        maxSpan={config.maxSpan}
       />
     );
   }
@@ -362,10 +372,17 @@ export const bamModule = defineTrackModule<BamAlignment>()({
   defaults: { height: 200, color: "#5b8bd0" },
   configSchema,
   async fetch({ config, region }): Promise<Data> {
-    if (region.end - region.start > config.maxBases) return [];
+    const gate =
+      config.display === "sashimi" ? config.sashimiMaxBases : config.maxBases;
+    if (region.end - region.start > gate) return [];
     const baiUrl = config.baiUrl ?? `${config.bamUrl}.bai`;
     const reader = getReader(config.bamUrl, baiUrl);
-    return reader.read(region.chromosome, region.start, region.end);
+    const reads = await reader.read(region.chromosome, region.start, region.end);
+    // Drop low-MAPQ (multi-mapping) reads — at paralogs like SMN these are the
+    // ambiguous SMN1/SMN2 reads that create spurious long-range junctions.
+    return config.minMapq > 0
+      ? reads.filter((r) => r.mappingQuality >= config.minMapq)
+      : reads;
   },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   render: { full: BamRenderer as any },
