@@ -23,7 +23,7 @@ import {
 const configSchema = z.object({
   bamUrl: fetchOnChange(z.string().min(1)),
   baiUrl: z.string().optional(),
-  display: z.enum(["coverage", "pileup", "both"]).default("coverage"),
+  display: z.enum(["coverage", "pileup", "both", "sashimi"]).default("coverage"),
   maxBases: z.number().default(20000),
   maxReads: z.number().default(400),
   color: z.string().default("#5b8bd0"),
@@ -63,6 +63,30 @@ function computeCoverage(reads: BamAlignment[], start: number, end: number): num
     }
   }
   return cov;
+}
+
+/** Splice junctions (N gaps) tallied from reads currently in view.
+ *  Counts are view-local: exact for the visible window, not genome-wide. */
+function junctionsFromReads(
+  reads: BamAlignment[],
+): { start: number; end: number; count: number }[] {
+  const tally = new Map<string, number>();
+  for (const r of reads) {
+    let ref = r.start;
+    for (const c of r.cigarOps) {
+      if (c.op === "M" || c.op === "=" || c.op === "X" || c.op === "D") {
+        ref += c.opLen;
+      } else if (c.op === "N") {
+        const key = `${ref}-${ref + c.opLen}`;
+        tally.set(key, (tally.get(key) ?? 0) + 1);
+        ref += c.opLen;
+      }
+    }
+  }
+  return [...tally.entries()].map(([k, count]) => {
+    const [start, end] = k.split("-").map(Number);
+    return { start, end, count };
+  });
 }
 
 /** Greedy row-packing for pileup. */
@@ -144,7 +168,15 @@ function Pileup({
 }) {
   const bases = region.end - region.start;
   const toX = (pos: number) => ((pos - region.start) / bases) * width;
-  const capped = reads.slice(0, config.maxReads);
+  // If more reads than the cap, sample EVENLY across the region rather than
+  // taking the first N (which come back sorted by start and would all cluster
+  // on the left, hiding reads under the rest of the coverage).
+  const capped =
+    reads.length <= config.maxReads
+      ? reads
+      : reads.filter(
+          (_, i) => i % Math.ceil(reads.length / config.maxReads) === 0,
+        );
   const rowOf = packRows(capped, 2);
   const rowCount = Math.max(1, ...rowOf.map((r) => r + 1));
   const rowH = Math.max(2, Math.min(10, (height - 2) / rowCount));
@@ -191,6 +223,59 @@ function Pileup({
           </g>
         );
       })}
+      {capped.length < reads.length && (
+        <text x={2} y={height - 2} fontSize={10} fill="#999">
+          showing {capped.length} of {reads.length} reads
+        </text>
+      )}
+    </>
+  );
+}
+
+function Sashimi({
+  reads,
+  region,
+  width,
+  height,
+  color,
+}: {
+  reads: BamAlignment[];
+  region: { start: number; end: number };
+  width: number;
+  height: number;
+  color: string;
+}) {
+  const bases = region.end - region.start;
+  const toX = (pos: number) => ((pos - region.start) / bases) * width;
+  const junctions = junctionsFromReads(reads).filter(
+    (j) => j.end >= region.start && j.start <= region.end,
+  );
+  if (junctions.length === 0) return null;
+  const maxCount = Math.max(...junctions.map((j) => j.count));
+  const baseline = height - 2;
+  const apexY = 12;
+  const stroke = (c: number) => 0.75 + (Math.log1p(c) / Math.log1p(maxCount)) * 3.25;
+  return (
+    <>
+      {junctions.map((j) => {
+        const x1 = toX(j.start);
+        const x2 = toX(j.end);
+        const midX = (x1 + x2) / 2;
+        return (
+          <g key={`${j.start}-${j.end}`}>
+            <path
+              d={`M ${x1} ${baseline} Q ${midX} ${apexY} ${x2} ${baseline}`}
+              fill="none"
+              stroke={color}
+              strokeWidth={stroke(j.count)}
+              opacity={0.85}
+            />
+            <text x={midX} y={apexY - 2} textAnchor="middle" fontSize={10} fill={color}>
+              {j.count}
+            </text>
+          </g>
+        );
+      })}
     </>
   );
 }
@@ -211,6 +296,18 @@ const BamRenderer: TrackRenderer<Config, Data> = ({ config, data, region, width,
   const mode = config.display;
   const covH = mode === "both" ? Math.round(height * 0.35) : height;
   const pileH = mode === "both" ? height - covH - 4 : height;
+
+  if (mode === "sashimi") {
+    return (
+      <Sashimi
+        reads={data}
+        region={region}
+        width={width}
+        height={height}
+        color={config.coverageColor}
+      />
+    );
+  }
 
   return (
     <>
@@ -253,6 +350,7 @@ function BamSettings({ config, updateConfig }: TrackSettingsProps<Config>) {
           <option value="coverage">Coverage</option>
           <option value="pileup">Reads</option>
           <option value="both">Both</option>
+          <option value="sashimi">Sashimi</option>
         </select>
       </label>
     </SettingsSection>
