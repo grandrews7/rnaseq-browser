@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { PsiPanel, type ClickedTranscript } from "./psi/PsiPanel";
+import { onTranscriptClick, emitTranscriptClick } from "./psi/bridge";
 import {
   GenomeBrowser,
   bigWigModule,
@@ -45,6 +47,15 @@ const geneTrack = transcriptModule.create({
     canonicalColor: CANONICAL_COLOR,
     highlightColor: HIGHLIGHT_COLOR,
     ...(HIGHLIGHT_GENE ? { geneName: HIGHLIGHT_GENE } : {}),
+  },
+}, {
+  onClick: (t: { name: string; coordinates: { start: number; end: number }; exons?: { coordinates: { start: number; end: number } }[] }) => {
+    const exons = (t.exons ?? []).map((e) => ({ start: e.coordinates.start, end: e.coordinates.end }));
+    emitTranscriptClick({
+      name: t.name,
+      chromosome: useBrowserStore.getState().region.chromosome,
+      exons,
+    });
   },
 });
 
@@ -267,6 +278,9 @@ export function App() {
 
   const [draft, setDraft] = useState(INITIAL_REGION);
   const [error, setError] = useState<string | null>(null);
+  const [clickedTranscript, setClickedTranscript] =
+    useState<ClickedTranscript | null>(null);
+  useEffect(() => onTranscriptClick(setClickedTranscript), []);
 
   // The browser never measures its own parent — we have to tell it the width.
   useEffect(() => {
@@ -337,6 +351,8 @@ export function App() {
       <div ref={containerRef} className="browser">
         <GenomeBrowser browserStore={useBrowserStore} trackStore={useTrackStore} />
       </div>
+
+      <PsiPanel transcript={clickedTranscript} />
     </main>
   );
 }
