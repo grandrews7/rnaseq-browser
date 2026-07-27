@@ -303,40 +303,53 @@ const BamRenderer: TrackRenderer<Config, Data> = ({ config, data, region, width,
   if (data.length === 0) return null;
 
   const mode = config.display;
-  const covH = mode === "both" ? Math.round(height * 0.35) : height;
-  const pileH = mode === "both" ? height - covH - 4 : height;
+  // Coverage is a persistent top band in every mode except "coverage" (which
+  // uses the full height). Arcs and/or reads stack underneath, IGV-style, so
+  // switching to sashimi or pileup never loses the coverage reference.
+  const showArcs = mode === "sashimi" || mode === "both";
+  const showReads = mode === "pileup" || mode === "both";
+  const showLower = showArcs || showReads;
 
-  if (mode === "sashimi") {
-    return (
-      <Sashimi
-        reads={data}
-        region={region}
-        width={width}
-        height={height}
-        color={config.coverageColor}
-        maxSpan={config.maxSpan}
-      />
-    );
-  }
+  // Layout: coverage takes a top slice when anything is shown below it.
+  const covH = showLower ? Math.round(height * 0.4) : height;
+  const lowerY = covH + 4;
+  const lowerH = height - lowerY;
+  // When both arcs and reads share the lower area, split it.
+  const arcH = showArcs && showReads ? Math.round(lowerH * 0.45) : lowerH;
+  const readsY = showArcs && showReads ? lowerY + arcH + 2 : lowerY;
+  const readsH = showArcs && showReads ? lowerH - arcH - 2 : lowerH;
 
   return (
     <>
-      {(mode === "coverage" || mode === "both") && (
-        <CoverageArea
-          reads={data}
-          region={region}
-          width={width}
-          height={covH}
-          color={config.coverageColor}
-        />
+      {/* Coverage: always on top */}
+      <CoverageArea
+        reads={data}
+        region={region}
+        width={width}
+        height={covH}
+        color={config.coverageColor}
+      />
+
+      {showArcs && (
+        <g transform={`translate(0, ${lowerY})`}>
+          <Sashimi
+            reads={data}
+            region={region}
+            width={width}
+            height={arcH}
+            color={config.coverageColor}
+            maxSpan={config.maxSpan}
+          />
+        </g>
       )}
-      {(mode === "pileup" || mode === "both") && (
-        <g transform={mode === "both" ? `translate(0, ${covH + 4})` : undefined}>
+
+      {showReads && (
+        <g transform={`translate(0, ${readsY})`}>
           <Pileup
             reads={data}
             region={region}
             width={width}
-            height={pileH}
+            height={readsH}
             config={config}
             tooltip={tooltip}
           />
