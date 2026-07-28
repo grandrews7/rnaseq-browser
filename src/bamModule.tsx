@@ -24,8 +24,15 @@ const configSchema = z.object({
   bamUrl: fetchOnChange(z.string().min(1)),
   baiUrl: z.string().optional(),
   display: z.enum(["coverage", "pileup", "both", "sashimi"]).default("coverage"),
-  maxBases: z.number().default(20000),        // pileup/coverage zoom gate
-  sashimiMaxBases: z.number().default(500000), // sashimi can render much wider
+  // Coverage is derived from the BAM by reading every alignment in the window,
+  // then binning. genomic-reader's read() has no limit/downsample hook, so the
+  // whole window's reads materialize in memory — on a very dense gene (e.g. ALB
+  // in HepG2) a wide window can exhaust the tab. This cap is the safe ceiling
+  // for pure-BAM coverage; beyond it we show "zoom in" rather than attempt the
+  // fetch. Raise it only if your BAMs aren't deeply covered.
+  coverageMaxBases: z.number().default(25000),  // coverage/signal zoom gate (BAM read volume bound)
+  maxBases: z.number().default(20000),          // pileup zoom gate (tight)
+  sashimiMaxBases: z.number().default(100000),  // sashimi zoom gate
   maxSpan: z.number().default(30000),          // drop paralog-crossing arcs
   minMapq: z.number().default(1),              // 0 drops multi-mappers (MAPQ 0)
   maxReads: z.number().default(400),
@@ -48,22 +55,49 @@ function getReader(bamUrl: string, baiUrl: string): BamReader {
 }
 
 /** Per-base coverage over [start,end) from CIGAR M/=/X ops (N and D skip). */
-function computeCoverage(reads: BamAlignment[], start: number, end: number): number[] {
-  const len = Math.max(0, end - start);
-  const cov = new Array<number>(len).fill(0);
+/**
+ * Per-BIN coverage over [start,end), binned to `nBins` (≈ pixel columns).
+ * Uses a difference array: each aligned segment contributes two O(1) updates
+ * (not one-per-base), so cost is O(reads × cigarOps + nBins) instead of
+ * O(total aligned bases). This keeps coverage fast even over a wide window on a
+ * very highly-expressed gene (e.g. ALB in HepG2), while still counting every
+ * read — no downsampling, so the depth is exact at bin resolution.
+ * N (splice) and D (deletion) advance the reference without adding depth.
+ */
+function computeBinnedCoverage(
+  reads: BamAlignment[],
+  start: number,
+  end: number,
+  nBins: number,
+): number[] {
+  const span = Math.max(1, end - start);
+  const binOf = (pos: number) =>
+    Math.min(nBins - 1, Math.max(0, Math.floor(((pos - start) / span) * nBins)));
+  // diff[i] += d means "depth rises by d starting at bin i"; prefix-sum later.
+  const diff = new Float64Array(nBins + 1);
   for (const r of reads) {
     let ref = r.start;
     for (const c of r.cigarOps) {
       if (c.op === "M" || c.op === "=" || c.op === "X") {
-        for (let p = ref; p < ref + c.opLen; p++) {
-          const i = p - start;
-          if (i >= 0 && i < len) cov[i]++;
+        const segStart = ref;
+        const segEnd = ref + c.opLen;
+        if (segEnd > start && segStart < end) {
+          const b0 = binOf(segStart);
+          const b1 = binOf(segEnd - 1);
+          diff[b0] += 1;
+          diff[b1 + 1] -= 1;
         }
         ref += c.opLen;
       } else if (c.op === "N" || c.op === "D") {
         ref += c.opLen;
       }
     }
+  }
+  const cov = new Array<number>(nBins).fill(0);
+  let running = 0;
+  for (let i = 0; i < nBins; i++) {
+    running += diff[i];
+    cov[i] = running;
   }
   return cov;
 }
@@ -130,17 +164,15 @@ function CoverageArea({
   color: string;
 }) {
   const bases = region.end - region.start;
-  const cov = computeCoverage(reads, region.start, region.end);
+  // One bin per pixel column: compute coverage at display resolution, so the
+  // cost scales with pixels (~width), not with the genomic span.
+  const nBins = Math.max(1, Math.min(2000, Math.floor(width)));
+  const cov = computeBinnedCoverage(reads, region.start, region.end, nBins);
   const max = Math.max(1, ...cov);
-  // Build a filled path sampled per pixel column (cheaper than per-base for wide views).
-  const cols = Math.min(width, bases);
-  const step = bases / cols;
   let d = `M 0 ${height}`;
-  for (let c = 0; c <= cols; c++) {
-    const basePos = Math.floor(c * step);
-    const depth = cov[Math.min(cov.length - 1, basePos)] ?? 0;
-    const x = (c / cols) * width;
-    const y = height - (depth / max) * height;
+  for (let i = 0; i < nBins; i++) {
+    const x = (i / nBins) * width;
+    const y = height - (cov[i] / max) * height;
     d += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
   }
   d += ` L ${width} ${height} Z`;
@@ -292,22 +324,25 @@ const BamRenderer: TrackRenderer<Config, Data> = ({ config, data, region, width,
   const tooltip = useTooltip<BamAlignment, Config>();
   const bases = region.end - region.start;
 
-  const gate = config.display === "sashimi" ? config.sashimiMaxBases : config.maxBases;
-  if (bases > gate) {
+  // Coverage shows across the wide gate; if we're even beyond THAT, nothing to
+  // draw. (Coverage is always part of every mode.)
+  if (bases > config.coverageMaxBases) {
     return (
       <text x={width / 2} y={height / 2} textAnchor="middle" fontSize={12} fill="#999">
-        Zoom in below {gate.toLocaleString()} bp to see BAM data
+        Zoom in below {config.coverageMaxBases.toLocaleString()} bp to see signal
       </text>
     );
   }
   if (data.length === 0) return null;
 
   const mode = config.display;
-  // Coverage is a persistent top band in every mode except "coverage" (which
-  // uses the full height). Arcs and/or reads stack underneath, IGV-style, so
-  // switching to sashimi or pileup never loses the coverage reference.
-  const showArcs = mode === "sashimi" || mode === "both";
-  const showReads = mode === "pileup" || mode === "both";
+  // Coverage always renders here. Pileup and sashimi are additionally gated by
+  // their own (tighter) thresholds, so zooming out progressively drops reads,
+  // then arcs, leaving the coverage signal — like a normal browser.
+  const showArcs =
+    (mode === "sashimi" || mode === "both") && bases <= config.sashimiMaxBases;
+  const showReads =
+    (mode === "pileup" || mode === "both") && bases <= config.maxBases;
   const showLower = showArcs || showReads;
 
   // Layout: coverage takes a top slice when anything is shown below it.
@@ -385,8 +420,14 @@ export const bamModule = defineTrackModule<BamAlignment>()({
   defaults: { height: 200, color: "#5b8bd0" },
   configSchema,
   async fetch({ config, region }): Promise<Data> {
-    const gate =
-      config.display === "sashimi" ? config.sashimiMaxBases : config.maxBases;
+    // Fetch reads if ANY enabled view is in range. Coverage (always part of
+    // every mode) has the widest gate, so effectively: fetch when within the
+    // widest of the views currently shown.
+    const m = config.display;
+    const gates: number[] = [config.coverageMaxBases]; // coverage always shown
+    if (m === "pileup" || m === "both") gates.push(config.maxBases);
+    if (m === "sashimi" || m === "both") gates.push(config.sashimiMaxBases);
+    const gate = Math.max(...gates);
     if (region.end - region.start > gate) return [];
     const baiUrl = config.baiUrl ?? `${config.bamUrl}.bai`;
     const reader = getReader(config.bamUrl, baiUrl);

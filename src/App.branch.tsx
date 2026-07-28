@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
   GenomeBrowser,
-  bigWigModule,
   createBrowserStore,
   createTrackStore,
   transcriptModule,
 } from "@weng-lab/genomebrowser";
 
-import { bamModule } from "./bamModule";
 import { dynseqModule } from "./dynseqModule";
 
 import {
@@ -22,11 +20,11 @@ import {
 } from "./config";
 
 const MARGIN_WIDTH = 150;
-const BASE = "https://users.wenglab.org/andrewsg/browser";
 
-// HNF1A — liver master-regulator TF, snappy in HepG2. hg38 gene:
-// chr12:120,978,543-121,002,512 (~24kb).
-const TEST_REGION = "chr12:120978000-121003000";
+// Start narrow so the dynseq track is in LETTER mode immediately (needs ~7+
+// pixels/base). ~150 bp over a ~900px track ≈ 6px/base; zoom in one notch to
+// cross into letters. This window is SMN2 exon 7.
+const TEST_REGION = "chr5:70076000-70076150";
 
 const useBrowserStore = createBrowserStore({
   region: TEST_REGION,
@@ -48,68 +46,19 @@ const geneTrack = transcriptModule.create({
   },
 });
 
-// HepG2 RNA-seq from BAM (coverage default; reads/sashimi on zoom).
-const rnaTrack = bamModule.create({
-  id: "hepg2-rna-bam",
-  title: "HepG2 RNA-seq (ENCFF660EXG)",
-  height: 180,
-  config: {
-    bamUrl: `${BASE}/ENCFF660EXG.bam`,
-    display: "coverage",
-    coverageMaxBases: 100000,
-    maxBases: 20000,
-    sashimiMaxBases: 100000,
-  },
-});
-
-// DNase accessibility — observed signal (ENCFF160DXJ) and ChromBPNet
-// bias-corrected predicted profile (ENCFF264HQR). Observed vs predicted is a QC:
-// agreement = faithful model.
-const dnaseObserved = bigWigModule.create({
-  id: "dnase-observed",
-  title: "HepG2 DNase — observed (ENCFF160DXJ)",
-  display: "full",
-  height: 60,
-  color: "#2a7a2a",
-  config: { url: `${BASE}/ENCFF160DXJ.bigWig`, fillWithZero: true },
-});
-
-const dnasePredicted = bigWigModule.create({
-  id: "dnase-predicted",
-  title: "HepG2 DNase — ChromBPNet predicted (ENCFF264HQR)",
-  display: "full",
-  height: 60,
-  color: "#6a3d9a",
-  config: { url: `${BASE}/ENCFF264HQR.bigWig`, fillWithZero: true },
-});
-
-// ChromBPNet counts contribution scores (dynseq: signal wide, motif letters in).
-const dynseqContrib = dynseqModule.create({
-  id: "dynseq-chrombpnet",
-  title: "ChromBPNet contribution (ENCFF829DSC)",
-  height: 110,
-  config: {
-    bigwigUrl: `${BASE}/ENCFF829DSC.bigWig`,
-    twoBitUrl: `${BASE}/hg38.2bit`,
-  },
-});
-
-// phyloP dynseq — evolutionary QC against the contribution scores.
-const dynseqPhyloP = dynseqModule.create({
-  id: "dynseq-phylop",
-  title: "Zoonomia phyloP (QC)",
-  height: 100,
+const dynseqTrack = dynseqModule.create({
+  id: "zoonomia-phylop-dynseq",
+  title: "Zoonomia 241 phyloP — dynseq",
+  height: 120,
   config: {
     bigwigUrl: "https://users.wenglab.org/andrewsg/241-mammalian-2020v2.bigWig",
-    twoBitUrl: `${BASE}/hg38.2bit`,
+    twoBitUrl: "https://users.wenglab.org/andrewsg/browser/hg38.2bit",
   },
 });
 
 const useTrackStore = createTrackStore({
-  modules: [transcriptModule, bigWigModule, bamModule, dynseqModule],
-  tracks: SHOW_GENE_TRACK
-    ? [geneTrack, rnaTrack, dnaseObserved, dnasePredicted, dynseqContrib, dynseqPhyloP]
-    : [rnaTrack, dnaseObserved, dnasePredicted, dynseqContrib, dynseqPhyloP],
+  modules: [transcriptModule, dynseqModule],
+  tracks: SHOW_GENE_TRACK ? [geneTrack, dynseqTrack] : [dynseqTrack],
 });
 
 const normalizeRegion = (value: string) =>
@@ -162,13 +111,13 @@ export function App() {
   return (
     <main>
       <header>
-        <h1>HepG2 multi-omic — HNF1A</h1>
+        <h1>dynseq test</h1>
         <div className="controls">
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && go()}
-            placeholder="chr12:120,978,000-121,003,000"
+            placeholder="chr5:70,076,000-70,076,150"
             spellCheck={false}
           />
           <button onClick={go}>Go</button>
