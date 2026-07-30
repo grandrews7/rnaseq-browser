@@ -125,8 +125,14 @@ const DynseqRenderer: TrackRenderer<Config, Data> = ({
     pixelsPerBase >= config.minPixelsPerBase && bases <= config.maxLetterBases;
 
 
-  const scores = data.map((d) => d.score);
-  const maxAbs = Math.max(1e-6, ...scores.map((s) => Math.abs(s)));
+  // Max absolute score, computed WITHOUT spreading the array into Math.max —
+  // `Math.max(...arr)` overflows the call stack for large arrays (a wide window
+  // over a genome-wide bigWig returns tens of thousands of points). Loop instead.
+  let maxAbs = 1e-6;
+  for (const d of data) {
+    const a = Math.abs(d.score);
+    if (a > maxAbs) maxAbs = a;
+  }
   const mid = height / 2;
   const toX = (pos: number) => ((pos - region.start) / bases) * width;
 
@@ -183,10 +189,19 @@ export const dynseqModule = defineTrackModule<DynseqDatum>()({
   async fetch({ config, region }): Promise<Data> {
     const bw = getReader(config.bigwigUrl);
     const twoBit = getReader(config.twoBitUrl);
-    const [scoreData, seq] = await Promise.all([
-      bw.readBigWigData(region.chromosome, region.start, region.chromosome, region.end),
-      twoBit.readTwoBitData(region.chromosome, region.start, region.end),
-    ]);
+    // A bigWig may not contain the requested chromosome (e.g. a locus-specific
+    // track queried elsewhere), in which case the reader can throw. Treat any
+    // read failure as "no data here" so navigating away can't crash the app.
+    let scoreData: { start: number; end: number; value: number }[];
+    let seq: string;
+    try {
+      [scoreData, seq] = await Promise.all([
+        bw.readBigWigData(region.chromosome, region.start, region.chromosome, region.end),
+        twoBit.readTwoBitData(region.chromosome, region.start, region.end),
+      ]);
+    } catch {
+      return [];
+    }
     const out: Data = [];
     for (const iv of scoreData) {
       for (let p = iv.start; p < iv.end; p++) {

@@ -168,7 +168,7 @@ function CoverageArea({
   // cost scales with pixels (~width), not with the genomic span.
   const nBins = Math.max(1, Math.min(2000, Math.floor(width)));
   const cov = computeBinnedCoverage(reads, region.start, region.end, nBins);
-  const max = Math.max(1, ...cov);
+  const max = cov.reduce((m, v) => (v > m ? v : m), 1);
   let d = `M 0 ${height}`;
   for (let i = 0; i < nBins; i++) {
     const x = (i / nBins) * width;
@@ -291,7 +291,7 @@ function Sashimi({
       j.end - j.start <= maxSpan,
   );
   if (junctions.length === 0) return null;
-  const maxCount = Math.max(...junctions.map((j) => j.count));
+  const maxCount = junctions.reduce((m, j) => (j.count > m ? j.count : m), 1);
   const baseline = height - 2;
   const apexY = 12;
   const stroke = (c: number) => 0.75 + (Math.log1p(c) / Math.log1p(maxCount)) * 3.25;
@@ -431,7 +431,12 @@ export const bamModule = defineTrackModule<BamAlignment>()({
     if (region.end - region.start > gate) return [];
     const baiUrl = config.baiUrl ?? `${config.bamUrl}.bai`;
     const reader = getReader(config.bamUrl, baiUrl);
-    const reads = await reader.read(region.chromosome, region.start, region.end);
+    let reads: BamAlignment[];
+    try {
+      reads = await reader.read(region.chromosome, region.start, region.end);
+    } catch {
+      return []; // chromosome not in BAM, or read failure — treat as no data
+    }
     // Drop low-MAPQ (multi-mapping) reads — at paralogs like SMN these are the
     // ambiguous SMN1/SMN2 reads that create spurious long-range junctions.
     return config.minMapq > 0

@@ -10,7 +10,12 @@
     "start": "node server/index.mjs"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.11",
+    "@mui/material": "^7.3.11",
     "@weng-lab/genomebrowser": "2.0.0-alpha.1",
+    "@weng-lab/ui-components": "^3.2.1",
     "buffer": "^6.0.3",
     "express": "^5.2.1",
     "react": "^19.2.0",

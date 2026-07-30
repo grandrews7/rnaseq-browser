@@ -113,7 +113,7 @@ const JunctionRenderer: TrackRenderer<Config, Data> = ({
   });
   if (visible.length === 0) return null;
 
-  const maxCount = Math.max(...visible.map((j) => j.count));
+  const maxCount = visible.reduce((m, j) => (j.count > m ? j.count : m), 1);
   const toX = (pos: number) => ((pos - region.start) / bases) * width;
 
   // Arc apex sits near the top; leave a little room for the count label.

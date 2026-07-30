@@ -7,6 +7,8 @@ import {
   transcriptModule,
 } from "@weng-lab/genomebrowser";
 
+import { GenomeSearch, type Result } from "@weng-lab/ui-components";
+
 import { bamModule } from "./bamModule";
 import { dynseqModule } from "./dynseqModule";
 
@@ -23,6 +25,7 @@ import {
 
 const MARGIN_WIDTH = 150;
 const BASE = "https://users.wenglab.org/andrewsg/browser";
+const SCREEN_GRAPHQL = "/api/screen-graphql";
 
 // HNF1A — liver master-regulator TF, snappy in HepG2. hg38 gene:
 // chr12:120,978,543-121,002,512 (~24kb).
@@ -57,7 +60,7 @@ const rnaTrack = bamModule.create({
     bamUrl: `${BASE}/ENCFF660EXG.bam`,
     display: "coverage",
     coverageMaxBases: 100000,
-    maxBases: 100000,
+    maxBases: 20000,
     sashimiMaxBases: 100000,
   },
 });
@@ -209,6 +212,17 @@ export function App() {
         </p>
         {error && <p className="error">{error}</p>}
       </header>
+
+      <div className="gene-search">
+        <GenomeSearch
+          assembly="GRCh38"
+          queries={["Gene", "SNP", "cCRE", "Coordinate"]}
+          graphqlUrl={SCREEN_GRAPHQL}
+          onSearchSubmit={(result: Result) => {
+            if (result.domain) setRegion(result.domain);
+          }}
+        />
+      </div>
 
       <div ref={containerRef} className="browser">
         <GenomeBrowser browserStore={useBrowserStore} trackStore={useTrackStore} />
