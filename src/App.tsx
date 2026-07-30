@@ -57,7 +57,7 @@ const rnaTrack = bamModule.create({
     bamUrl: `${BASE}/ENCFF660EXG.bam`,
     display: "coverage",
     coverageMaxBases: 100000,
-    maxBases: 20000,
+    maxBases: 100000,
     sashimiMaxBases: 100000,
   },
 });
@@ -94,6 +94,29 @@ const dynseqContrib = dynseqModule.create({
   },
 });
 
+// ISM (in silico mutagenesis) importance — the model's output change when each
+// base is mutated. A different (more direct) attribution than contribution
+// scores. Two models: ChromBPNet and Cherimoya, for a methods comparison.
+const dynseqIsmChrombpnet = dynseqModule.create({
+  id: "dynseq-ism-chrombpnet",
+  title: "ChromBPNet ISM (HNF1A)",
+  height: 110,
+  config: {
+    bigwigUrl: `${BASE}/hnf1a_chrombpnet_ism.bw`,
+    twoBitUrl: `${BASE}/hg38.2bit`,
+  },
+});
+
+const dynseqIsmCherimoya = dynseqModule.create({
+  id: "dynseq-ism-cherimoya",
+  title: "Cherimoya ISM (HNF1A)",
+  height: 110,
+  config: {
+    bigwigUrl: `${BASE}/hnf1a_cherimoya_ism.bw`,
+    twoBitUrl: `${BASE}/hg38.2bit`,
+  },
+});
+
 // phyloP dynseq — evolutionary QC against the contribution scores.
 const dynseqPhyloP = dynseqModule.create({
   id: "dynseq-phylop",
@@ -108,8 +131,8 @@ const dynseqPhyloP = dynseqModule.create({
 const useTrackStore = createTrackStore({
   modules: [transcriptModule, bigWigModule, bamModule, dynseqModule],
   tracks: SHOW_GENE_TRACK
-    ? [geneTrack, rnaTrack, dnaseObserved, dnasePredicted, dynseqContrib, dynseqPhyloP]
-    : [rnaTrack, dnaseObserved, dnasePredicted, dynseqContrib, dynseqPhyloP],
+    ? [geneTrack, rnaTrack, dnaseObserved, dnasePredicted, dynseqContrib, dynseqIsmChrombpnet, dynseqIsmCherimoya, dynseqPhyloP]
+    : [rnaTrack, dnaseObserved, dnasePredicted, dynseqContrib, dynseqIsmChrombpnet, dynseqIsmCherimoya, dynseqPhyloP],
 });
 
 const normalizeRegion = (value: string) =>

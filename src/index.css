@@ -9,8 +9,9 @@ body {
 }
 
 main {
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
+  padding: 0 16px;
   padding: 24px 28px 48px;
 }
 

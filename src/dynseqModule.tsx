@@ -46,8 +46,8 @@ type Data = DynseqDatum[];
 const configSchema = z.object({
   bigwigUrl: fetchOnChange(z.string().min(1)),
   twoBitUrl: fetchOnChange(z.string().min(1)),
-  minPixelsPerBase: z.number().default(7),
-  maxLetterBases: z.number().default(1000),
+  minPixelsPerBase: z.number().default(3),
+  maxLetterBases: z.number().default(500),
   // Coordinate seam between the bigWig scores and the 2bit sequence.
   // genomic-reader's loadSequence() subtracts 1 from the requested start
   // internally (TwoBitHeaderReader: `start = start - 1`), so the returned
@@ -123,6 +123,7 @@ const DynseqRenderer: TrackRenderer<Config, Data> = ({
   const pixelsPerBase = width / Math.max(1, bases);
   const showLetters =
     pixelsPerBase >= config.minPixelsPerBase && bases <= config.maxLetterBases;
+
 
   const scores = data.map((d) => d.score);
   const maxAbs = Math.max(1e-6, ...scores.map((s) => Math.abs(s)));
