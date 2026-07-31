@@ -29,7 +29,7 @@ const SCREEN_GRAPHQL = "https://screen.api.wenglab.org/graphql";
 
 // HNF1A — liver master-regulator TF, snappy in HepG2. hg38 gene:
 // chr12:120,978,543-121,002,512 (~24kb).
-const TEST_REGION = "chr12:120978000-121003000";
+const TEST_REGION = "chr12:120,965,921-120,990,921";
 
 const useBrowserStore = createBrowserStore({
   region: TEST_REGION,
@@ -100,22 +100,22 @@ const dynseqContrib = dynseqModule.create({
 // ISM (in silico mutagenesis) importance — the model's output change when each
 // base is mutated. A different (more direct) attribution than contribution
 // scores. Two models: ChromBPNet and Cherimoya, for a methods comparison.
-const dynseqIsmChrombpnet = dynseqModule.create({
-  id: "dynseq-ism-chrombpnet",
-  title: "ChromBPNet ISM (HNF1A)",
-  height: 110,
-  config: {
-    bigwigUrl: `${BASE}/hnf1a_chrombpnet_ism.bw`,
-    twoBitUrl: `${BASE}/hg38.2bit`,
-  },
-});
+// const dynseqIsmChrombpnet = dynseqModule.create({
+//   id: "dynseq-ism-chrombpnet",
+//   title: "ChromBPNet ISM (HNF1A)",
+//   height: 110,
+//   config: {
+//     bigwigUrl: `${BASE}/hnf1a_chrombpnet_ism.bw`,
+//     twoBitUrl: `${BASE}/hg38.2bit`,
+//   },
+// });
 
 const dynseqIsmCherimoya = dynseqModule.create({
   id: "dynseq-ism-cherimoya",
   title: "Cherimoya ISM (HNF1A)",
   height: 110,
   config: {
-    bigwigUrl: `${BASE}/hnf1a_cherimoya_ism.bw`,
+    bigwigUrl: `${BASE}/cherimoya_ism_ENCSR149XIL.5fold.bw`,
     twoBitUrl: `${BASE}/hg38.2bit`,
   },
 });
@@ -134,8 +134,8 @@ const dynseqPhyloP = dynseqModule.create({
 const useTrackStore = createTrackStore({
   modules: [transcriptModule, bigWigModule, bamModule, dynseqModule],
   tracks: SHOW_GENE_TRACK
-    ? [geneTrack, rnaTrack, dnaseObserved, dnasePredicted, dynseqContrib, dynseqIsmChrombpnet, dynseqIsmCherimoya, dynseqPhyloP]
-    : [rnaTrack, dnaseObserved, dnasePredicted, dynseqContrib, dynseqIsmChrombpnet, dynseqIsmCherimoya, dynseqPhyloP],
+    ? [geneTrack, rnaTrack, dnaseObserved, dnasePredicted, dynseqContrib, dynseqIsmCherimoya, dynseqPhyloP]
+    : [rnaTrack, dnaseObserved, dnasePredicted, dynseqContrib, dynseqIsmCherimoya, dynseqPhyloP],
 });
 
 const normalizeRegion = (value: string) =>
