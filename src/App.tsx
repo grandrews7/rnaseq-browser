@@ -25,7 +25,7 @@ import {
 
 const MARGIN_WIDTH = 150;
 const BASE = "https://users.wenglab.org/andrewsg/browser";
-const SCREEN_GRAPHQL = "https://screen.api.wenglab.org/graphql";
+const SCREEN_GRAPHQL = "/api/screen-graphql";
 
 // HNF1A — liver master-regulator TF, snappy in HepG2. hg38 gene:
 // chr12:120,978,543-121,002,512 (~24kb).
